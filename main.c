@@ -266,15 +266,15 @@ int main(void) {
                             }
                     }
 
-                        // AnalysisResult result = {0};
-                        // printf("analyzing...\n");
-                        // AnalysisStatus status = analyze(sensor_data, DATA_LEN, no_motion_snapshot[0], 0, &result);
-                        // printf("analyzed!\n");
-                        // switch (result.classification) {
-                        //     case STAND: current_state = "SIT   "; break;
-                        //     case SIT: current_state = "STAND "; break;
-                        //     case OTHER: current_state = "OTHER "; break;
-                        // }
+                        AnalysisResult result = {0};
+                        printf("analyzing...\n");
+                        AnalysisStatus status = analyze(sensor_data, DATA_LEN, no_motion_snapshot[0], 0, &result);
+                        printf("analyzed!\n");
+                        switch (result.classification) {
+                            case STAND: current_state = "SIT   "; break;
+                            case SIT: current_state = "STAND "; break;
+                            case OTHER: current_state = "OTHER "; break;
+                        }
                 }
                 int2_status_result = 0;
             }
@@ -303,7 +303,7 @@ int main(void) {
                             }
                     }
 
-                    ActionType sample = classify_orientation(no_motion_snapshot, 0);
+                    //ActionType sample = classify_orientation(no_motion_snapshot, 0);
 
                     #ifdef ACTIONS_BUFFER_ON
                     add_to_actiontype_circular_buffer(&recorded_actions, sample);
@@ -337,11 +337,11 @@ int main(void) {
                     #endif
                     
 
-                    switch (sample) {
-                        case STAND: current_state = "STAND "; break;
-                        case SIT: current_state = "SIT   "; break;
-                        case OTHER: current_state = "OTHER "; break;
-                    }
+                    // switch (sample) {
+                    //     case STAND: current_state = "STAND "; break;
+                    //     case SIT: current_state = "SIT   "; break;
+                    //     case OTHER: current_state = "OTHER "; break;
+                    // }
 
                 }
 
