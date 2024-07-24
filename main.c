@@ -18,6 +18,7 @@ P1.7: UCB0SOMI (peripheral out, controller in) -> BMI270 pin 1
 #include "hal_LCD.h"
 #include "intrinsics.h"
 #include "msp430fr5xx_6xxgeneric.h"
+#include "sys/cdefs.h"
 #include "util.h"
 #include <msp430.h>
 #include "interrupt.h"
@@ -31,6 +32,10 @@ unsigned int int1_status = 0;
 unsigned int int2_status = 0;
 unsigned int int1_status_result = 0;
 unsigned int int2_status_result = 0;
+
+
+volatile static unsigned int counter = 0;
+volatile static int timer_update = 0;
 
 
 #define INT_PORT GPIO_PORT_P2
@@ -156,6 +161,14 @@ void init_GPIO() {
     GPIO_enableInterrupt(GPIO_PORT_P2, GPIO_PIN5);
 }
 
+void init_timer() {
+    // timer stuff
+    
+    CS_initClockSignal(CS_ACLK, CS_LFXTCLK_SELECT,  CS_CLOCK_DIVIDER_1); // 32768 Hz
+    TA0CCTL0 = CCIE; // interrupt enable
+    TA0CTL = TASSEL__ACLK | MC__CONTINOUS | ID__1;
+}
+
 static struct bmi2_dev bmi;
 
 int main(void) {
@@ -168,6 +181,7 @@ int main(void) {
     init_GPIO();
     init_bmi_device(&bmi);
     init_uart();
+    init_timer();
 
     GPIO_clearInterrupt(GPIO_PORT_P1, GPIO_PIN1);
     GPIO_clearInterrupt(GPIO_PORT_P1, GPIO_PIN2);
@@ -202,7 +216,8 @@ int main(void) {
     sensor_activity_data.type = BMI2_STEP_ACTIVITY;
     const char *activity_output[4] = { "STILL ", "WALK  ", "RUN   ", "UNKNOW" };
 
-    char* current_state = "UNKNOW";
+    //char* current_state = "UNKNOW";
+    char current_state[7];
     uint32_t indx = 0;
 
     char output[128];
@@ -337,11 +352,13 @@ int main(void) {
                     #endif
                     
 
-                    switch (sample) {
-                        case STAND: current_state = "STAND "; break;
-                        case SIT: current_state = "SIT   "; break;
-                        case OTHER: current_state = "OTHER "; break;
-                    }
+                    // switch (sample) {
+                    //     case STAND: current_state = "STAND "; break;
+                    //     case SIT: current_state = "SIT   "; break;
+                    //     case OTHER: current_state = "OTHER "; break;
+                    // }
+                    if (sample == STAND) counter = 0;
+                    snprintf(current_state, 6, "%d            ", counter);
 
                 }
 
@@ -523,4 +540,11 @@ __interrupt void PORT2_ISR(void) {
         case P2IV_P2IFG6 : break;
         case P2IV_P2IFG7 : break;
     }
+}
+
+
+#pragma vector = TIMER0_A0_VECTOR
+__interrupt void Timer_A0_CCR0_ISR(void) {
+    counter += 1;
+    timer_update = 1;
 }
