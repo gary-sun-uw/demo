@@ -4,6 +4,7 @@
 typedef enum ActionType {
 	SIT,
 	STAND,
+	REST,
 	OTHER,
 	LENGTH
 } ActionType;
