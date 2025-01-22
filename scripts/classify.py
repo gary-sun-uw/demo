@@ -11,9 +11,12 @@ merged_data=pd.concat([label_data,device_data],axis=1)
 merged_data=merged_data.dropna()
 merged_data.to_csv('merged_data.csv',index=False)
 
-X=merged_data.drop(['state','time'],axis=1)
+# X=merged_data.drop(['state','time'],axis=1)
+X=merged_data[['acc.x','acc.y','acc.z','gyz.x','gyr.y','gyr.z']]
 y=merged_data['state']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+print(y_train.value_counts())
+print(y_test.value_counts())
 model=LogisticRegression()
 model.fit(X_train,y_train)
 score=model.score(X_test,y_test)
@@ -30,3 +33,7 @@ from sklearn.tree import export_text
 r = export_text(tree_model, feature_names=list(X.columns))
 print(r)
 
+print('Fully trained model')
+tree_model.fit(pd.concat([X_train,X_test],axis=0),pd.concat([y_train,y_test],axis=0))
+r = export_text(tree_model, feature_names=list(X.columns))
+print(r)
