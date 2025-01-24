@@ -18,7 +18,11 @@ ActionType classify_orientation(BMI2SensAxisData data[], uint32_t length) {
         return SIT;
     } else if (vec3d_vector_similarity(avg, standing) > 0.2) {
         return STAND;
-    } else {
+    }
+     else if (vec3d_vector_similarity(avg, sitting) > 0.05) {
+        return REST;
+    } 
+    else {
         return OTHER;
     }
 }
