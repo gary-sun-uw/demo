@@ -10,7 +10,7 @@ ActionType classify(double average_vertical_position) {
     }
 }
 
-ActionType tree_classify(Frame frames[1]){
+ActionType tree_classify(Frame frames[5]){
     if (frames[4].acc.z <= -13379.00) {
         return REST;
     } else {
