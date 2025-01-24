@@ -11,10 +11,17 @@ ActionType classify(double average_vertical_position) {
 }
 
 ActionType tree_classify(Frame frames[1]){
-    Frame frame = frames[0];
-    return (frame.acc.y <= -1095.50) ? 
-           ((frame.acc.y <= -7084.50) ? 
-            ((frame.acc.z <= -14.50) ? OTHER : STAND) 
-            : REST) 
-           : SIT;
+    if (frames[4].acc.z <= -13379.00) {
+        return REST;
+    } else {
+        if (frames[1].acc.z <= 10642.00) {
+            return STAND;
+        } else {
+            if (frames[1].gyr.x <= -1936.50) {
+                return STAND;
+            } else {
+                return SIT;
+            }
+        }
+    }
 }

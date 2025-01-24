@@ -13,6 +13,6 @@ typedef enum ActionType {
 
 ActionType classify(double average_vertical_position);
 
-ActionType tree_classify(Frame frames[1]);
+ActionType tree_classify(Frame frames[5]);
 
 #endif

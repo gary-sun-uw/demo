@@ -5,7 +5,7 @@
 
 typedef struct Frame {
     Vec3d acc;
-    Vec3d gyro;
+    Vec3d gyr;
 } Frame;
 
 #endif
