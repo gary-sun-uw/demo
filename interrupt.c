@@ -6,8 +6,8 @@
 
 const struct bmi2_sens_int_config feat_int_map[NUM_FEAT]  = { 
     //{ .type = BMI2_ANY_MOTION, .hw_int_pin = BMI2_INT2 }, 
-    { .type = BMI2_NO_MOTION, .hw_int_pin = BMI2_INT1 },
-    { .type = BMI2_STEP_ACTIVITY, .hw_int_pin = BMI2_INT1 }
+    { .type = BMI2_NO_MOTION, .hw_int_pin = BMI2_INT1 }
+    //{ .type = BMI2_STEP_ACTIVITY, .hw_int_pin = BMI2_INT1 }
 };
 
 
@@ -15,8 +15,9 @@ int8_t setup_features(struct bmi2_dev *bmi2_dev){
     int8_t rslt;
     struct bmi2_sens_config configs[NUM_FEAT] = {
         //{ .type = BMI2_ANY_MOTION },
-        { .type = BMI2_NO_MOTION },
-        { .type = BMI2_STEP_ACTIVITY } };
+        { .type = BMI2_NO_MOTION }
+        //{ .type = BMI2_STEP_ACTIVITY } 
+    };
     rslt = bmi270_get_sensor_config(configs, NUM_FEAT, bmi2_dev);
     bmi2_error_codes_print_result(rslt);
     if (rslt == BMI2_OK) {
@@ -27,9 +28,9 @@ int8_t setup_features(struct bmi2_dev *bmi2_dev){
         // configs[0].cfg.any_motion.threshold = 0x1FF;
 
         /* 1LSB equals 20ms*/
-        configs[0].cfg.no_motion.duration = 0x10;
+        configs[0].cfg.no_motion.duration = 0x40;
         /* 1LSB equals to 0.48mg. Default is 70mg, setting to 50mg. */
-        configs[0].cfg.no_motion.threshold = 0x34;
+        configs[0].cfg.no_motion.threshold = 0x64;
 
         /* Set new configurations. */
         rslt = bmi270_set_sensor_config(configs, NUM_FEAT, bmi2_dev);

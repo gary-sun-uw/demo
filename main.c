@@ -26,12 +26,22 @@ P1.7: UCB0SOMI (peripheral out, controller in) -> BMI270 pin 1
 #include "classification/classify.h"
 #include "commons/data_formats.h"
 #include "commons/circular_buffer.h"
+#include "StopWatchMode.h"
+
+#define CAPTURE
+//#define PRINT_CAPTURE
 
 unsigned int int1_status = 0;
+unsigned int en_int1_status = 1;
 unsigned int int2_status = 0;
 unsigned int int1_status_result = 0;
 unsigned int int2_status_result = 0;
 
+volatile unsigned int counter = 0;
+volatile int centisecond = 0;
+Calendar currentTime;
+unsigned int x = 0;
+unsigned int y = 0;
 
 #define INT_PORT GPIO_PORT_P2
 #define INT1_PIN GPIO_PIN4
@@ -185,15 +195,12 @@ int main(void) {
 
     //__enable_interrupt();
 
-    //printf("test\n");
-
     /* Status of api are returned to this variable. */
     int8_t rslt;
 
     /* Accel sensor and no-motion feature are listed in array. */
     #define SENS_NUM 5
     uint8_t sens_list[SENS_NUM] = { BMI2_ACCEL, BMI2_GYRO, BMI2_ANY_MOTION, BMI2_NO_MOTION, BMI2_STEP_ACTIVITY  };
-
 
     /* Variable to get no-motion interrupt status. */
     uint16_t int_status = 0;
@@ -224,9 +231,9 @@ int main(void) {
         setup_features(&bmi);
         bmi270_sensor_enable(sens_list, SENS_NUM, &bmi);
         bmi270_map_feat_int(feat_int_map, NUM_FEAT, &bmi);
-
+        stopWatchModeInit();
         do {
-            printf("LPM\n");
+            //printf("LPM\n");
             //Renable interrupts
             GPIO_clearInterrupt(INT_PORT, INT2_PIN);
             GPIO_enableInterrupt(INT_PORT, INT2_PIN);
@@ -234,9 +241,88 @@ int main(void) {
             GPIO_clearInterrupt(INT_PORT, INT1_PIN);
             GPIO_enableInterrupt(INT_PORT, INT1_PIN);
 
+            //displayText(current_state);
+            //printf(current_state);
+            displayTime();
+
             // LPM Sleep
-            displayText(current_state);
             __bis_SR_register(LPM0_bits + GIE);
+            
+            #ifdef CAPTURE
+            RTC_C_startClock(RTC_C_BASE);
+
+            if(centisecond % (5048) == 0){
+                x++;
+            }
+            if(x == 15){
+                x = 0;
+                indx = 0;
+                while (indx < NO_MOTION_SNAPSHOT_LEN)
+                {
+                    rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
+                    if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
+                        (sensor_data_temp.status & BMI2_DRDY_GYR))
+                    {   
+                        no_motion_snapshot[indx].acc = (struct BMI2SensAxisData){
+                            .x = sensor_data_temp.acc.x,
+                            .y = sensor_data_temp.acc.y,
+                            .z = sensor_data_temp.acc.z};
+                        no_motion_snapshot[indx].gyr = (struct BMI2SensAxisData){
+                            .x = sensor_data_temp.gyr.x,
+                            .y = sensor_data_temp.gyr.y,
+                            .z = sensor_data_temp.gyr.z};
+                        indx++;
+                    }
+                }
+
+                Frame f[1];
+                f[0].acc.x = no_motion_snapshot[0].acc.x;
+                f[0].acc.y = no_motion_snapshot[0].acc.y;
+                f[0].acc.z = no_motion_snapshot[0].acc.z;
+                f[0].gyro.x = no_motion_snapshot[0].gyr.x;
+                f[0].gyro.y = no_motion_snapshot[0].gyr.y;
+                f[0].gyro.z = no_motion_snapshot[0].gyr.z;
+                ActionType at = tree_classify(f);
+                switch (at) {
+                    case STAND: 
+                        printf("STAND");
+                        //RTC_C_holdClock(RTC_C_BASE);
+                        break;
+                    case SIT: 
+                        printf("SIT");
+                        //RTC_C_startClock(RTC_C_BASE);
+                        break;
+                    case REST:
+                        printf("REST");
+                    case OTHER: 
+                        current_state = "OTHER "; 
+                        break;
+                }
+                printf("\n");
+            
+                #ifdef PRINT_CAPTURE
+                indx = 0;
+                printf("%d,", y);
+                while (indx < NO_MOTION_SNAPSHOT_LEN)
+                {
+                    if(indx == NO_MOTION_SNAPSHOT_LEN - 1){
+                        
+                    printf("%d,%d,%d,%d,%d,%d",
+                    no_motion_snapshot[indx].acc.x,no_motion_snapshot[indx].acc.y,no_motion_snapshot[indx].acc.z,
+                    no_motion_snapshot[indx].gyr.x,no_motion_snapshot[indx].gyr.y,no_motion_snapshot[indx].gyr.z);
+                    } else {
+                        
+                    printf("%d,%d,%d,%d,%d,%d,",
+                    no_motion_snapshot[indx].acc.x,no_motion_snapshot[indx].acc.y,no_motion_snapshot[indx].acc.z,
+                    no_motion_snapshot[indx].gyr.x,no_motion_snapshot[indx].gyr.y,no_motion_snapshot[indx].gyr.z);
+                    }
+                    indx++;
+                }
+                printf("\n");
+                y++;
+                #endif
+            }
+            #endif
 
             if(int2_status == 1){
                 int2_status = 0;
@@ -266,24 +352,19 @@ int main(void) {
                             }
                     }
 
-                        // AnalysisResult result = {0};
-                        // printf("analyzing...\n");
-                        // AnalysisStatus status = analyze(sensor_data, DATA_LEN, no_motion_snapshot[0], 0, &result);
-                        // printf("analyzed!\n");
-                        // switch (result.classification) {
-                        //     case STAND: current_state = "SIT   "; break;
-                        //     case SIT: current_state = "STAND "; break;
-                        //     case OTHER: current_state = "OTHER "; break;
-                        // }
                 }
                 int2_status_result = 0;
             }
 
-            if(int1_status ==  1){
+            #ifdef CAPTURE
+            en_int1_status = 0;
+            #endif
+
+            if(int1_status == 1 && en_int1_status == 1){
                 int1_status = 0;
                 /* To check the interrupt status of no-motion. */
                 if (int1_status_result & BMI270_NO_MOT_STATUS_MASK){
-                    printf("no-motion interrupt is generated\n");
+                    //printf("no-motion interrupt is generated\n");
                     indx = 0;
                     while (indx < NO_MOTION_SNAPSHOT_LEN)
                     {
@@ -302,8 +383,6 @@ int main(void) {
                                 indx++;
                             }
                     }
-
-                    ActionType sample = classify_orientation(no_motion_snapshot, 0);
 
                     #ifdef ACTIONS_BUFFER_ON
                     add_to_actiontype_circular_buffer(&recorded_actions, sample);
@@ -336,13 +415,19 @@ int main(void) {
                     }
                     #endif
                     
-
-                    switch (sample) {
-                        case STAND: current_state = "STAND "; break;
-                        case SIT: current_state = "SIT   "; break;
-                        case OTHER: current_state = "OTHER "; break;
+                    indx = 0;
+                    switch (classify_orientation(no_motion_snapshot, 0)) {
+                        case STAND: current_state = "STAND "; 
+                            RTC_C_holdClock(RTC_C_BASE);
+                            break;
+                        case SIT: 
+                            current_state = "SIT   ";
+                            RTC_C_startClock(RTC_C_BASE);
+                            break;
+                        case OTHER: 
+                            current_state = "OTHER "; 
+                            break;
                     }
-
                 }
 
                 // if (int1_status_result & BMI270_STEP_ACT_STATUS_MASK){
@@ -489,6 +574,47 @@ static int8_t set_accel_gyro_config(struct bmi2_dev *bmi)
 //         case P1IV_P1IFG7 : break;
 //     }
 // }
+
+/*
+ * RTC Interrupt Service Routine
+ * Wakes up every ~10 milliseconds to update stowatch
+ */
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=RTC_VECTOR
+__interrupt
+#elif defined(__GNUC__)
+__attribute__((interrupt(RTC_VECTOR)))
+#endif
+void RTC_ISR(void)
+{
+    switch(__even_in_range(RTCIV, 16))
+    {
+    case RTCIV_NONE: break;      //No interrupts
+    case RTCIV_RTCOFIFG: break;      //RTCOFIFG
+    case RTCIV_RTCRDYIFG:             //RTCRDYIFG
+        counter = RTCPS;
+        centisecond = 0;
+        __bic_SR_register_on_exit(LPM3_bits);
+        break;
+    case RTCIV_RTCTEVIFG:             //RTCEVIFG
+        //Interrupts every minute
+        __no_operation();
+        break;
+    case RTCIV_RTCAIFG:             //RTCAIFG
+         __bic_SR_register_on_exit(LPM0_bits); // leave low power mode
+        //__no_operation();
+        break;
+    case RTCIV_RT0PSIFG:
+        centisecond = RTCPS - counter;
+        __bic_SR_register_on_exit(LPM3_bits);
+        break;     //RT0PSIFG
+    case RTCIV_RT1PSIFG:
+        __bic_SR_register_on_exit(LPM3_bits);
+        break;     //RT1PSIFG
+
+    default: break;
+    }
+}
 
 /*
  * PORT2 Interrupt Service Routine

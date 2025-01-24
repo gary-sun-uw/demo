@@ -81,6 +81,11 @@ double vec3d_magnitude(Vec3d a) {
     return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 }
 
+//double vec3d_normalize(Vec3d a) {
+//    double mag = vec3d_magnitude(a);
+//    return (Vec3d)(a.x/mag, a.y/mag, a.z/mag);
+//}
+
 Vec3d vec3d_project(Vec3d a, Vec3d b) { /* a onto b*/
     Vec3d b_unit_vector = vec3d_multiply_scalar(b, 1 / vec3d_magnitude(b)); 
     double component_a_onto_b = vec3d_dot_product(a, b) / vec3d_magnitude(b);
@@ -144,7 +149,54 @@ Vec3d vec3d_avg_unit_5(Vec3d a,Vec3d b,Vec3d c,Vec3d d,Vec3d e) {
 
 }
 
+//Vec3d vec3d_avg_unit(Vec3d *vecs, unsigned len) {
+//	double x = 0;
+//    for (int i = 0; i < len; i++) {
+//        x += vecs[i].x
+//    }
+//    double y = 0;
+//    for (int i = 0; i < len; i++) {
+//        y += vecs[i].y
+//    }
+//    double z = 0;
+//    for (int i = 0; i < len; i++) {
+//        z += vecs[i].z
+//    }
+//
+//	double mag = x*x + y*y + z*z;
+//	mag = sqrt(mag);
+//
+//	return (Vec3d){x/mag, y/mag, z/mag};
+//
+//}
+
+
 double vec3d_vector_similarity(Vec3d a, Vec3d b) {
     return vec3d_dot_product(a, b) / (vec3d_magnitude(a) * vec3d_magnitude(b));
     // a.b = |a||b|cos(theta) => cos(theta) = a.b / |a||b|
 }
+
+/*
+    Return the pairwise siml
+*/
+//double vec3d_pairwise_similarity(Vec3d *vecs, unsigned len) {
+//    Vec3d avg_vec = vec3d_avg_unit(vecs, len);
+//    Vec3d unit_diff;
+//    for (int i = 0; i < len; i++) {
+//        Vec3d unit_vec = vec3d_normalize(vecs[i])
+//        unit_diff.x += abs((unit_vec.x)-avg_vec.x);
+//        unit_diff.y += abs((unit_vec.y)-avg_vec.y);
+//        unit_diff.z += abs((unit_vec.z)-avg_vec.z);
+//    }
+//    double avg_mag = 0;
+//    for (int i = 0; i < len; i++) {
+//        avg_mag += (1/len)*(vec3d_magnitude(vecs[i]));
+//    }
+//    double mag_diff = 0;
+//    for (int i = 0; i < len; i++) {
+//        mag_diff += abs(avg_mag - vec3d_magnitude(vecs[i]));
+//    }
+//    double total_diff = unit_diff.x+unit_diff.y+unit_diff.z;
+//    double sim = 1/(1+total_diff*mag_diff);
+//    return sim;
+//}
