@@ -1,39 +1,28 @@
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import export_text
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-label_data=pd.read_csv('data.csv')
-device_data=pd.read_csv('../data/gary_data_1.csv')
+device_data=pd.read_csv('../data/gary_data_2.csv', index_col=0)
+device_data['state']=pd.Series(dtype=str)
+device_data.loc[:100, 'state']='s'
+device_data.loc[100:200, 'state']='t'
+device_data.loc[200:300, 'state']='r'
 
-merged_data=pd.concat([label_data,device_data],axis=1)
-merged_data=merged_data.dropna()
-merged_data.to_csv('merged_data.csv',index=False)
+X=device_data.drop(['state'],axis=1)
+y=device_data['state']
 
-# X=merged_data.drop(['state','time'],axis=1)
-X=merged_data[['acc.x','acc.y','acc.z','gyz.x','gyr.y','gyr.z']]
-y=merged_data['state']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-print(y_train.value_counts())
-print(y_test.value_counts())
-model=LogisticRegression()
-model.fit(X_train,y_train)
-score=model.score(X_test,y_test)
-print('score', score)
-print(model.coef_.shape)
+print(y_train.value_counts(), y_test.value_counts())
 
 tree_model=DecisionTreeClassifier(max_depth=3)
 tree_model.fit(X_train,y_train)
 score=tree_model.score(X_test,y_test)
-print('score', score)
+print('Score:', score)
 
-# Print a ascii tree
-from sklearn.tree import export_text
-r = export_text(tree_model, feature_names=list(X.columns))
-print(r)
-
-print('Fully trained model')
-tree_model.fit(pd.concat([X_train,X_test],axis=0),pd.concat([y_train,y_test],axis=0))
+print('Fully fit tree:')
+tree_model.fit(X,y)
 r = export_text(tree_model, feature_names=list(X.columns))
 print(r)
