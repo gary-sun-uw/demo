@@ -170,7 +170,9 @@ Vec3d vec3d_avg_unit_5(Vec3d a,Vec3d b,Vec3d c,Vec3d d,Vec3d e) {
 //
 //}
 
-
+/*
+    1 is most similar and -1 is least similar.
+*/
 double vec3d_vector_similarity(Vec3d a, Vec3d b) {
     return vec3d_dot_product(a, b) / (vec3d_magnitude(a) * vec3d_magnitude(b));
     // a.b = |a||b|cos(theta) => cos(theta) = a.b / |a||b|
