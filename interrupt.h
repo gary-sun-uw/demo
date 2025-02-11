@@ -2,7 +2,7 @@
 #ifndef INTERRUPT_H
 #define INTERRUPT_H
 
-#define NUM_FEAT 1
+#define NUM_FEAT 2
 
 extern const struct bmi2_sens_int_config feat_int_map[NUM_FEAT];
 extern int8_t setup_features(struct bmi2_dev*);

@@ -6,7 +6,8 @@
 
 const struct bmi2_sens_int_config feat_int_map[NUM_FEAT]  = { 
     //{ .type = BMI2_ANY_MOTION, .hw_int_pin = BMI2_INT2 }, 
-    { .type = BMI2_NO_MOTION, .hw_int_pin = BMI2_INT1 }
+    { .type = BMI2_NO_MOTION, .hw_int_pin = BMI2_INT1 },
+    { .type = BMI2_WRIST_GESTURE, .hw_int_pin = BMI2_INT2 }
     //{ .type = BMI2_STEP_ACTIVITY, .hw_int_pin = BMI2_INT1 }
 };
 
@@ -15,23 +16,30 @@ int8_t setup_features(struct bmi2_dev *bmi2_dev){
     int8_t rslt;
     struct bmi2_sens_config configs[NUM_FEAT] = {
         //{ .type = BMI2_ANY_MOTION },
-        { .type = BMI2_NO_MOTION }
+        { .type = BMI2_NO_MOTION },
+        { .type = BMI2_WRIST_GESTURE }
         //{ .type = BMI2_STEP_ACTIVITY } 
     };
     rslt = bmi270_get_sensor_config(configs, NUM_FEAT, bmi2_dev);
     bmi2_error_codes_print_result(rslt);
     if (rslt == BMI2_OK) {
 
-        // /* 1LSB equals 20ms*/
-        // configs[0].cfg.any_motion.duration = 0x08;
-        // /* 1LSB equals to 0.48mg. Default is 83mg, setting to 50mg. */
-        // configs[0].cfg.any_motion.threshold = 0x1FF;
+        // // /* 1LSB equals 20ms*/
+        // configs[0].cfg.any_motion.duration = 100;
+        // // /* 1LSB equals to 0.48mg. Default is 83mg, setting to 50mg. */
+        // configs[0].cfg.any_motion.threshold = 2500;
+        // configs[0].cfg.any_motion.select_z = 1;
+        // configs[0].cfg.any_motion.select_x = 0;
+        // configs[0].cfg.any_motion.select_y = 0;
 
         /* 1LSB equals 20ms*/
         configs[0].cfg.no_motion.duration = 0x40;
         /* 1LSB equals to 0.48mg. Default is 70mg, setting to 50mg. */
         configs[0].cfg.no_motion.threshold = 0x64;
 
+        //configs[0].cfg.wrist_gest.wearable_arm = BMI2_ARM_RIGHT;
+        //configs[1].cfg.wrist_gest.max_duration = 100;
+        
         /* Set new configurations. */
         rslt = bmi270_set_sensor_config(configs, NUM_FEAT, bmi2_dev);
         bmi2_error_codes_print_result(rslt);

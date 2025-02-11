@@ -1,6 +1,7 @@
 #include "classify.h"
-#include "vec3d.h"
-#include "constants.h"
+#include "../commons/vec3d.h"
+#include "../commons/constants.h"
+
 
 ActionType classify(double average_vertical_position) {
     if (average_vertical_position < -0.2) {
@@ -31,14 +32,15 @@ ActionType tree_classify(Frame frames[5]){
 IntervalSetting classify_interval_setting(
         Frame *frames,
         int length, 
-        double min_similarity, 
-        IntervalSetting current_setting
+        double min_similarity
     ) {
 
-    for (int i = 0; i < n_interval_settings; i++) {
+    unsigned int i, j;
+    for (i = 0; i < n_interval_settings; i++) {
         const Vec3d ref = available_interval_settings[i].reference;
         int all_in = 1;
-        for (int j = 0; j < length; j++) {
+
+        for (j = 0; j < length; j++) {
             if (vec3d_vector_similarity(ref, frames[j].acc) < min_similarity) {
                 all_in = 0;
                 break;
@@ -49,5 +51,5 @@ IntervalSetting classify_interval_setting(
         }
     }
 
-    return current_setting;
+    return (IntervalSetting){{0,0,0}, -1};
 }

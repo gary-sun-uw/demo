@@ -4303,7 +4303,7 @@ static int8_t enable_sensor_features(uint64_t sensor_sel, struct bmi2_dev *dev)
 {
     /* Variable to define error */
     int8_t rslt = BMI2_OK;
-
+    set_wrist_gesture(BMI2_ENABLE, dev);
     /* Enable sig-motion feature */
     if (sensor_sel & BMI2_SIG_MOTION_SEL)
     {

@@ -26,16 +26,18 @@ P1.7: UCB0SOMI (peripheral out, controller in) -> BMI270 pin 1
 #include "classification/classify.h"
 #include "commons/data_formats.h"
 #include "commons/circular_buffer.h"
+#include "commons/constants.h"
 #include "StopWatchMode.h"
 
-#define CAPTURE
+//#define CAPTURE
 //#define PRINT_CAPTURE
+//#define CLASSIFY
 
 unsigned int int1_status = 0;
-unsigned int en_int1_status = 1;
 unsigned int int2_status = 0;
 unsigned int int1_status_result = 0;
 unsigned int int2_status_result = 0;
+unsigned int interval_setting_mode = 0;
 
 volatile unsigned int counter = 0;
 volatile int centisecond = 0;
@@ -166,9 +168,11 @@ void init_GPIO() {
     GPIO_enableInterrupt(GPIO_PORT_P2, GPIO_PIN5);
 }
 
-static struct bmi2_dev bmi;
+
 
 int main(void) {
+    static struct bmi2_dev bmi;
+
     // Stop watchdog timer
     WDT_A_hold(WDT_A_BASE);
 
@@ -199,11 +203,8 @@ int main(void) {
     int8_t rslt;
 
     /* Accel sensor and no-motion feature are listed in array. */
-    #define SENS_NUM 5
-    uint8_t sens_list[SENS_NUM] = { BMI2_ACCEL, BMI2_GYRO, BMI2_ANY_MOTION, BMI2_NO_MOTION, BMI2_STEP_ACTIVITY  };
-
-    /* Variable to get no-motion interrupt status. */
-    uint16_t int_status = 0;
+    #define SENS_NUM 4
+    uint8_t sens_list[SENS_NUM] = { BMI2_ACCEL, BMI2_GYRO, BMI2_WRIST_GESTURE, BMI2_NO_MOTION };
 
     struct bmi2_feat_sensor_data sensor_activity_data = { 0 };
     sensor_activity_data.type = BMI2_STEP_ACTIVITY;
@@ -212,6 +213,11 @@ int main(void) {
     char* current_state = "UNKNOW";
     uint32_t indx = 0;
 
+    const char *gesture_output[6] =
+    { "unknown_gesture", "push_arm_down", "pivot_up", "wrist_shake_jiggle", "flick_in", "flick_out" };
+    struct bmi2_feat_sensor_data sens_data = { 0 };
+    sens_data.type = BMI2_WRIST_GESTURE;
+
     char output[128];
     int len;
 
@@ -219,19 +225,22 @@ int main(void) {
 
     /* Initialize bmi270. */
     rslt = bmi270_init(&bmi);
-    bmi2_error_codes_print_result(rslt);
+    //bmi2_error_codes_print_result(rslt);
 
-    displayText("INIT  ");
+    IntervalSetting intSet = default_interval_setting;
 
     if (rslt == BMI2_OK)
     {
         /* Enable the selected sensors. */
+        //bmi.aps_status = BMI2_ENABLE;
         set_accel_gyro_config(&bmi);
         setup_interrupt_pin(&bmi);
         setup_features(&bmi);
         bmi270_sensor_enable(sens_list, SENS_NUM, &bmi);
         bmi270_map_feat_int(feat_int_map, NUM_FEAT, &bmi);
         stopWatchModeInit();
+
+        //interval_setting_mode = 1;
         do {
             //printf("LPM\n");
             //Renable interrupts
@@ -245,225 +254,234 @@ int main(void) {
             //printf(current_state);
             displayTime();
 
+            if(interval_setting_mode == 1){
+                RTC_C_startClock(RTC_C_BASE);
+            }
+
             // LPM Sleep
             __bis_SR_register(LPM0_bits + GIE);
             
-            #ifdef CAPTURE
-            RTC_C_startClock(RTC_C_BASE);
-
-            if(centisecond % (5048) == 0){
-                x++;
-            }
-            if(x == 15){
-                x = 0;
-                indx = 0;
-                while (indx < NO_MOTION_SNAPSHOT_LEN)
-                {
-                    rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
-                    if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
-                        (sensor_data_temp.status & BMI2_DRDY_GYR))
-                    {   
-                        no_motion_snapshot[indx].acc = (struct BMI2SensAxisData){
-                            .x = sensor_data_temp.acc.x,
-                            .y = sensor_data_temp.acc.y,
-                            .z = sensor_data_temp.acc.z};
-                        no_motion_snapshot[indx].gyr = (struct BMI2SensAxisData){
-                            .x = sensor_data_temp.gyr.x,
-                            .y = sensor_data_temp.gyr.y,
-                            .z = sensor_data_temp.gyr.z};
-                        indx++;
-                    }
+            if(interval_setting_mode == 1){
+                if(centisecond % (5048) == 0){
+                    x++;
                 }
-
-                Frame f[1];
-                f[0].acc.x = no_motion_snapshot[0].acc.x;
-                f[0].acc.y = no_motion_snapshot[0].acc.y;
-                f[0].acc.z = no_motion_snapshot[0].acc.z;
-                f[0].gyro.x = no_motion_snapshot[0].gyr.x;
-                f[0].gyro.y = no_motion_snapshot[0].gyr.y;
-                f[0].gyro.z = no_motion_snapshot[0].gyr.z;
-                ActionType at = tree_classify(f);
-                switch (at) {
-                    case STAND: 
-                        printf("STAND");
-                        //RTC_C_holdClock(RTC_C_BASE);
-                        break;
-                    case SIT: 
-                        printf("SIT");
-                        //RTC_C_startClock(RTC_C_BASE);
-                        break;
-                    case REST:
-                        printf("REST");
-                    case OTHER: 
-                        current_state = "OTHER "; 
-                        break;
-                }
-                printf("\n");
-            
-                #ifdef PRINT_CAPTURE
-                indx = 0;
-                printf("%d,", y);
-                while (indx < NO_MOTION_SNAPSHOT_LEN)
-                {
-                    if(indx == NO_MOTION_SNAPSHOT_LEN - 1){
-                        
-                    printf("%d,%d,%d,%d,%d,%d",
-                    no_motion_snapshot[indx].acc.x,no_motion_snapshot[indx].acc.y,no_motion_snapshot[indx].acc.z,
-                    no_motion_snapshot[indx].gyr.x,no_motion_snapshot[indx].gyr.y,no_motion_snapshot[indx].gyr.z);
-                    } else {
-                        
-                    printf("%d,%d,%d,%d,%d,%d,",
-                    no_motion_snapshot[indx].acc.x,no_motion_snapshot[indx].acc.y,no_motion_snapshot[indx].acc.z,
-                    no_motion_snapshot[indx].gyr.x,no_motion_snapshot[indx].gyr.y,no_motion_snapshot[indx].gyr.z);
-                    }
-                    indx++;
-                }
-                printf("\n");
-                y++;
-                #endif
-            }
-            #endif
-
-            if(int2_status == 1){
-                int2_status = 0;
-
-                // rslt = bmi2_get_int_status(&int_status, &bmi);
-                // bmi2_error_codes_print_result(rslt);
-
-                /* To check the interrupt status of any-motion. */
-                if (int2_status_result & BMI270_ANY_MOT_STATUS_MASK){
-                    printf("any-motion interrupt is generated, recording...\n");
+                if(x == 5){
+                    x = 0;
                     indx = 0;
-                    while (indx < DATA_LEN)
-                    {
-                         rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
-                            if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
-                                (sensor_data_temp.status & BMI2_DRDY_GYR))
-                            {   
-                                sensor_data[indx].acc = (struct BMI2SensAxisData){
-                                    .x = sensor_data_temp.acc.x,
-                                    .y = sensor_data_temp.acc.y,
-                                    .z = sensor_data_temp.acc.z};
-                                sensor_data[indx].gyr = (struct BMI2SensAxisData){
-                                    .x = sensor_data_temp.gyr.x,
-                                    .y = sensor_data_temp.gyr.y,
-                                    .z = sensor_data_temp.gyr.z};
-                                indx++;
-                            }
-                    }
-
-                }
-                int2_status_result = 0;
-            }
-
-            #ifdef CAPTURE
-            en_int1_status = 0;
-            #endif
-
-            if(int1_status == 1 && en_int1_status == 1){
-                int1_status = 0;
-                /* To check the interrupt status of no-motion. */
-                if (int1_status_result & BMI270_NO_MOT_STATUS_MASK){
-                    //printf("no-motion interrupt is generated\n");
-                    indx = 0;
+                    #define INT_SET_FRAMES 5
+                    Frame f[INT_SET_FRAMES];
                     while (indx < NO_MOTION_SNAPSHOT_LEN)
                     {
-                         rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
-                            if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
-                                (sensor_data_temp.status & BMI2_DRDY_GYR))
-                            {   
-                                no_motion_snapshot[indx].acc = (struct BMI2SensAxisData){
-                                    .x = sensor_data_temp.acc.x,
-                                    .y = sensor_data_temp.acc.y,
-                                    .z = sensor_data_temp.acc.z};
-                                no_motion_snapshot[indx].gyr = (struct BMI2SensAxisData){
-                                    .x = sensor_data_temp.gyr.x,
-                                    .y = sensor_data_temp.gyr.y,
-                                    .z = sensor_data_temp.gyr.z};
-                                indx++;
-                            }
-                    }
+                        rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
+                        if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
+                            (sensor_data_temp.status & BMI2_DRDY_GYR))
+                        {   
+                            f[indx] = (struct Frame){
+                                .acc = (struct Vec3d){
+                                    .x = (double)sensor_data_temp.acc.x,
+                                    .y = (double)sensor_data_temp.acc.y,
+                                    .z = (double)sensor_data_temp.acc.z
+                                },
+                                .gyr = (struct Vec3d){
+                                    .x = (double)sensor_data_temp.gyr.x,
+                                    .y = (double)sensor_data_temp.gyr.y,
+                                    .z = (double)sensor_data_temp.gyr.z
+                                }
+                            };
 
-                    #ifdef ACTIONS_BUFFER_ON
-                    add_to_actiontype_circular_buffer(&recorded_actions, sample);
-
-                    printf(sample == STAND ? "STAND " : sample == SIT ? "SIT " : "OTHER ");
-
-                    for (i = 0; i < actions_buffer_size; i++) {
-                        ActionType a = recorded_actions.data[(recorded_actions.tail + i) % recorded_actions.size];
-                        printf(a == STAND ? "STAND " : a == SIT ? "SIT " : "OTHER ");
-                    }
-                    printf("\n");
-
-                    uint8_t n_stands = 0;
-                    uint8_t n_sits = 0;
-                    uint8_t n_others = 0;
-                    for (i = 0; i < actions_buffer_size; i++) {
-                        ActionType a = recorded_actions.data[(recorded_actions.tail + i) % recorded_actions.size];
-                        switch (a) {
-                            case SIT: n_sits++; break;
-                            case STAND: n_stands++; break;
-                            case OTHER: n_others++; break;
-                            default: break;
+                            indx++;
                         }
                     }
 
-                    if (n_stands >= 1) {
-                        sample = STAND;
-                    } else {
-                        sample = n_stands > n_sits ? (n_stands > n_others ? STAND : OTHER) : (n_sits > n_others ? SIT : OTHER);
+                    IntervalSetting result = classify_interval_setting(f, INT_SET_FRAMES, interval_vector_min_similarity);
+                    if(result.interval_mins != -1){
+                        interval_setting_mode = 0;
+                        intSet = result;
+                        stopWatchModeInit();
+                        printf("switched to interval: %d, exiting interval setting mode\n", result.interval_mins);
                     }
-                    #endif
-                    
-                    indx = 0;
-                    switch (classify_orientation(no_motion_snapshot, 0)) {
-                        case STAND: current_state = "STAND "; 
-                            RTC_C_holdClock(RTC_C_BASE);
+
+                    #ifdef CLASSIFY
+                    ActionType at = tree_classify(f);
+                    switch (at) {
+                        case STAND: 
+                            printf("STAND");
+                            //RTC_C_holdClock(RTC_C_BASE);
                             break;
                         case SIT: 
-                            current_state = "SIT   ";
-                            RTC_C_startClock(RTC_C_BASE);
+                            printf("SIT");
+                            //RTC_C_startClock(RTC_C_BASE);
+                            break;
+                        case REST:
+                            printf("REST");
                             break;
                         case OTHER: 
-                            current_state = "OTHER "; 
+                            printf("OTHER");
                             break;
                     }
+                    printf("\n");
+                    #endif
+                
+                    #ifdef PRINT_CAPTURE
+                    indx = 0;
+                    printf("%d,", y);
+                    while (indx < INT_SET_FRAMES)
+                    {
+                        if(indx == INT_SET_FRAMES - 1){
+                            
+                        printf("%d,%d,%d,%d,%d,%d",
+                        f[indx].acc.x,f[indx].acc.y,f[indx].acc.z,
+                        f[indx].gyr.x,f[indx].gyr.y,f[indx].gyr.z);
+                        } else {
+                            
+                        printf("%d,%d,%d,%d,%d,%d,",
+                        f[indx].acc.x,f[indx].acc.y,f[indx].acc.z,
+                        f[indx].gyr.x,f[indx].gyr.y,f[indx].gyr.z);
+                        }
+                        indx++;
+                    }
+                    printf("\n");
+                    y++;
+                    #endif
+                }
+            } else {
+                //notify user
+            
+                if(int2_status == 1){
+                    int2_status = 0;
+                    bmi2_get_int_status(&int2_status_result, &bmi);
+                    //printf("int2_status_result: %x\n",int2_status_result);
+
+                    if(int2_status_result & BMI270_WRIST_GEST_STATUS_MASK){
+                        bmi270_get_feature_data(&sens_data, 1, &bmi);
+                        if (sens_data.sens_data.wrist_gesture_output == 3){
+                            //shake -> enter interval setting mode
+                            interval_setting_mode = 1;
+                            printf("interval setting mode on \n");
+                        }
+                        //printf("Wrist gesture = %d\r\n", sens_data.sens_data.wrist_gesture_output);
+                        //printf("Gesture output = %s\n", gesture_output[sens_data.sens_data.wrist_gesture_output]);
+                    }
+
+                    // /* To check the interrupt status of any-motion. */
+                    if (int2_status_result & BMI270_ANY_MOT_STATUS_MASK){
+                    }
+
+                    int2_status_result = 0;
                 }
 
-                // if (int1_status_result & BMI270_STEP_ACT_STATUS_MASK){
-                //     /* Get step activity output. */
-                //     rslt = bmi270_get_feature_data(&sensor_activity_data, 1, &bmi);
+                if(int1_status == 1){
+                    int1_status = 0;
+                    bmi2_get_int_status(&int1_status_result, &bmi);
+                    /* To check the interrupt status of no-motion. */
+                    if (int1_status_result & BMI270_NO_MOT_STATUS_MASK){
+                        //printf("no-motion interrupt is generated\n");
+                        indx = 0;
+                        Frame f[5];
+                        while (indx < NO_MOTION_SNAPSHOT_LEN)
+                        {
+                            rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
+                            if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
+                                (sensor_data_temp.status & BMI2_DRDY_GYR))
+                            {   
+                                f[indx] = (struct Frame){
+                                    .acc = (struct Vec3d){
+                                        .x = sensor_data_temp.acc.x,
+                                        .y = sensor_data_temp.acc.y,
+                                        .z = sensor_data_temp.acc.z
+                                    },
+                                    .gyr = (struct Vec3d){
+                                        .x = sensor_data_temp.gyr.x,
+                                        .y = sensor_data_temp.gyr.y,
+                                        .z = sensor_data_temp.gyr.z
+                                    }
+                                };
+    
+                                indx++;
+                            }
+                        }
 
-                //     /* Print the step activity output. */
-                //     printf("Step activity = %s\n", activity_output[sensor_activity_data.sens_data.activity_output]);
+                        #ifdef ACTIONS_BUFFER_ON
+                        add_to_actiontype_circular_buffer(&recorded_actions, sample);
 
-                //     if(sensor_activity_data.sens_data.activity_output == 0) {
-                //         indx = 0;
-                //         while (indx < 1)
-                //         {
-                //             rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
-                //                 if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
-                //                     (sensor_data_temp.status & BMI2_DRDY_GYR))
-                //                 {   
-                //                     sensor_data_snapshot.acc = (struct BMI2SensAxisData){
-                //                         .x = sensor_data_temp.acc.x,
-                //                         .y = sensor_data_temp.acc.y,
-                //                         .z = sensor_data_temp.acc.z};
-                //                     sensor_data_snapshot.gyr = (struct BMI2SensAxisData){
-                //                         .x = sensor_data_temp.gyr.x,
-                //                         .y = sensor_data_temp.gyr.y,
-                //                         .z = sensor_data_temp.gyr.z};
-                //                     indx++;
-                //                 }
-                //         }
-                //     }
+                        printf(sample == STAND ? "STAND " : sample == SIT ? "SIT " : "OTHER ");
 
-                //     // if(sensor_activity_data.sens_data.activity_output == 1 || sensor_activity_data.sens_data.activity_output == 2) {
-                //     //     current_state = "STAND ";
-                //     // }
+                        for (i = 0; i < actions_buffer_size; i++) {
+                            ActionType a = recorded_actions.data[(recorded_actions.tail + i) % recorded_actions.size];
+                            printf(a == STAND ? "STAND " : a == SIT ? "SIT " : "OTHER ");
+                        }
+                        printf("\n");
 
-                // }
-                int1_status_result = 0;
+                        uint8_t n_stands = 0;
+                        uint8_t n_sits = 0;
+                        uint8_t n_others = 0;
+                        for (i = 0; i < actions_buffer_size; i++) {
+                            ActionType a = recorded_actions.data[(recorded_actions.tail + i) % recorded_actions.size];
+                            switch (a) {
+                                case SIT: n_sits++; break;
+                                case STAND: n_stands++; break;
+                                case OTHER: n_others++; break;
+                                default: break;
+                            }
+                        }
+
+                        if (n_stands >= 1) {
+                            sample = STAND;
+                        } else {
+                            sample = n_stands > n_sits ? (n_stands > n_others ? STAND : OTHER) : (n_sits > n_others ? SIT : OTHER);
+                        }
+                        #endif
+                        
+                        indx = 0;
+                        switch (tree_classify(f)) {
+                            case STAND:
+                                stopWatchModeInit();
+                                break;
+                            case SIT: 
+                                RTC_C_startClock(RTC_C_BASE);
+                                break;
+                            case OTHER: 
+                                break;
+                        }
+                    }
+
+
+
+                    // if (int1_status_result & BMI270_STEP_ACT_STATUS_MASK){
+                    //     /* Get step activity output. */
+                    //     rslt = bmi270_get_feature_data(&sensor_activity_data, 1, &bmi);
+
+                    //     /* Print the step activity output. */
+                    //     printf("Step activity = %s\n", activity_output[sensor_activity_data.sens_data.activity_output]);
+
+                    //     if(sensor_activity_data.sens_data.activity_output == 0) {
+                    //         indx = 0;
+                    //         while (indx < 1)
+                    //         {
+                    //             rslt = bmi2_get_sensor_data(&sensor_data_temp, &bmi);               
+                    //                 if ((rslt == BMI2_OK) && (sensor_data_temp.status & BMI2_DRDY_ACC) &&
+                    //                     (sensor_data_temp.status & BMI2_DRDY_GYR))
+                    //                 {   
+                    //                     sensor_data_snapshot.acc = (struct BMI2SensAxisData){
+                    //                         .x = sensor_data_temp.acc.x,
+                    //                         .y = sensor_data_temp.acc.y,
+                    //                         .z = sensor_data_temp.acc.z};
+                    //                     sensor_data_snapshot.gyr = (struct BMI2SensAxisData){
+                    //                         .x = sensor_data_temp.gyr.x,
+                    //                         .y = sensor_data_temp.gyr.y,
+                    //                         .z = sensor_data_temp.gyr.z};
+                    //                     indx++;
+                    //                 }
+                    //         }
+                    //     }
+
+                    //     // if(sensor_activity_data.sens_data.activity_output == 1 || sensor_activity_data.sens_data.activity_output == 2) {
+                    //     //     current_state = "STAND ";
+                    //     // }
+
+                    // }
+                    int1_status_result = 0;
+                }
             }
 
         } while (rslt == BMI2_OK);
@@ -634,7 +652,7 @@ __interrupt void PORT2_ISR(void) {
             //toggle led
             P9OUT ^= BIT7;
             int1_status = 1;
-            bmi2_get_int_status(&int1_status_result, &bmi);
+            //bmi2_get_int_status(&int1_status_result, &bmi);
             __bic_SR_register_on_exit(LPM0_bits); // leave low power mode
             break;
         case P2IV_P2IFG5 : 
@@ -643,7 +661,7 @@ __interrupt void PORT2_ISR(void) {
             //toggle led
             P1OUT ^= BIT0;
             int2_status = 1;
-            bmi2_get_int_status(&int2_status_result, &bmi);
+            //bmi2_get_int_status(&int2_status_result, &bmi);
             __bic_SR_register_on_exit(LPM0_bits); // leave low power mode
             break;
         case P2IV_P2IFG6 : break;

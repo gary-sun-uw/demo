@@ -2,7 +2,7 @@
 #define CLASSIFY_H
 
 #include "frame.h"
-#include "vec3d.h"
+#include "../commons/vec3d.h"
 
 typedef enum ActionType {
 	SIT,
@@ -30,8 +30,7 @@ ActionType tree_classify(Frame frames[5]);
 IntervalSetting classify_interval_setting(
     Frame *frames,
     int length, 
-    double min_similarity, 
-    IntervalSetting current_setting
+    double min_similarity
 );
 
 #endif
