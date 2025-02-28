@@ -1,6 +1,7 @@
 #include "classify.h"
 #include "../commons/vec3d.h"
 #include "../commons/constants.h"
+#include <math.h>
 
 
 ActionType classify(double average_vertical_position) {
@@ -14,19 +15,10 @@ ActionType classify(double average_vertical_position) {
 }
 
 ActionType tree_classify(Frame frames[5]){
-    if (frames[4].acc.z <= -13379.00) {
-        return REST;
-    } else {
-        if (frames[1].acc.z <= 10642.00) {
-            return STAND;
-        } else {
-            if (frames[1].gyr.x <= -1936.50) {
-                return STAND;
-            } else {
-                return SIT;
-            }
-        }
-    }
+    const Vec3d acc_average = vec3d_avg_unit_5(frames[0].acc, frames[1].acc, frames[2].acc, frames[3].acc, frames[4].acc);
+    const double sim_to_sit = 1 - abs(acc_average.z) / 16000;
+    const double sim_to_stand = 1 - abs(acc_average.x) / 16000;
+    return sim_to_sit >= 0.7 ? SIT : sim_to_stand >= 0.7 ? STAND : OTHER;
 }
 
 IntervalSetting classify_interval_setting(

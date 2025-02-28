@@ -19,4 +19,8 @@ static const IntervalSetting available_interval_settings[n_interval_settings] = 
 
 static const double interval_vector_min_similarity = 0.8;
 
+static const Vec3d sit_reference = {0,0,0};
+
+static const Vec3d stand_reference = {0,0,0};
+
 #endif
